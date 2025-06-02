@@ -137,6 +137,7 @@ private:
   BLECharacteristic* outputKeyboard;
   BLECharacteristic* inputMediaKeys;
   BLEAdvertising*    advertising;
+  BLESecurity*       pSecurity;
   BLEServer*         pServer;
   KeyReport          _keyReport;
   MediaKeyReport     _mediaKeyReport;
@@ -156,6 +157,8 @@ public:
   void begin(void);
   void end(void);
   void disconnect();
+  BLESecurity* getBLESecurity();
+  BLEAdvertising* getBLEAdvertising();
   void sendReport(KeyReport* keys);
   void sendReport(MediaKeyReport* keys);
   size_t press(uint8_t k);

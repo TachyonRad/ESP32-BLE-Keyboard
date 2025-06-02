@@ -97,6 +97,8 @@ static const uint8_t _hidReportDescriptor[] = {
 
 BleKeyboard::BleKeyboard(std::string deviceName, std::string deviceManufacturer, uint8_t batteryLevel) 
     : hid(0)
+	, pServer(0)
+	, pSecurity(0)
     , deviceName(std::string(deviceName).substr(0, 15))
     , deviceManufacturer(std::string(deviceManufacturer).substr(0,15))
     , batteryLevel(batteryLevel) {}
@@ -104,6 +106,11 @@ BleKeyboard::BleKeyboard(std::string deviceName, std::string deviceManufacturer,
 void BleKeyboard::begin(void)
 {
   BLEDevice::init(String(deviceName.c_str()));
+  if (pServer)
+  {
+	disconnect();
+	delete pServer;
+  }
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(this);
 
@@ -125,8 +132,12 @@ void BleKeyboard::begin(void)
   BLEDevice::setSecurityAuth(true, true, true);
 
 #else
-
-  BLESecurity* pSecurity = new BLESecurity();
+  
+  if (pSecurity)
+  {
+	delete pSecurity;
+  }
+  pSecurity = new BLESecurity();
   pSecurity->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_MITM_BOND);
 
 #endif // USE_NIMBLE
@@ -152,10 +163,27 @@ void BleKeyboard::end(void)
 
 void BleKeyboard::disconnect(void)
 {
-	auto connIds = pServer->getConnIds();
-	for (auto connId : connIds) {
-    	pServer->disconnect(connId);
+	if (!pServer)
+	{
+		return;
 	}
+
+	std::map<uint16_t, conn_status_t> peerDevices = pServer->getPeerDevices(false);
+
+    for (const auto& pair : peerDevices) {
+        uint16_t connId = pair.first;
+        pServer->disconnect(connId);
+    }
+}
+
+BLESecurity *BleKeyboard::getBLESecurity()
+{
+    return pSecurity;
+}
+
+BLEAdvertising *BleKeyboard::getBLEAdvertising()
+{
+    return advertising;
 }
 
 bool BleKeyboard::isConnected(void) {
