@@ -104,7 +104,7 @@ BleKeyboard::BleKeyboard(std::string deviceName, std::string deviceManufacturer,
 void BleKeyboard::begin(void)
 {
   BLEDevice::init(String(deviceName.c_str()));
-  BLEServer* pServer = BLEDevice::createServer();
+  pServer = BLEDevice::createServer();
   pServer->setCallbacks(this);
 
   hid = new BLEHIDDevice(pServer);
@@ -148,6 +148,14 @@ void BleKeyboard::begin(void)
 
 void BleKeyboard::end(void)
 {
+}
+
+void BleKeyboard::disconnect(void)
+{
+	auto connIds = pServer->getConnIds();
+	for (auto connId : connIds) {
+    	pServer->disconnect(connId);
+	}
 }
 
 bool BleKeyboard::isConnected(void) {
