@@ -96,9 +96,9 @@ static const uint8_t _hidReportDescriptor[] = {
 };
 
 BleKeyboard::BleKeyboard(std::string deviceName, std::string deviceManufacturer, uint8_t batteryLevel) 
-    : hid(0)
-	, pServer(0)
-	, pSecurity(0)
+    : hid(nullptr)
+	, pServer(nullptr)
+	, pSecurity(nullptr)
     , deviceName(std::string(deviceName).substr(0, 15))
     , deviceManufacturer(std::string(deviceManufacturer).substr(0,15))
     , batteryLevel(batteryLevel) {}
@@ -106,12 +106,10 @@ BleKeyboard::BleKeyboard(std::string deviceName, std::string deviceManufacturer,
 void BleKeyboard::begin(void)
 {
   BLEDevice::init(String(deviceName.c_str()));
-  if (pServer)
+  if (!pServer)
   {
-	disconnect();
-	delete pServer;
+	  pServer = BLEDevice::createServer();
   }
-  pServer = BLEDevice::createServer();
   pServer->setCallbacks(this);
 
   hid = new BLEHIDDevice(pServer);
@@ -126,19 +124,18 @@ void BleKeyboard::begin(void)
   hid->pnp(0x02, vid, pid, version);
   hid->hidInfo(0x00, 0x01);
 
-
+// TODO possible removal
 #if defined(USE_NIMBLE)
 
   BLEDevice::setSecurityAuth(true, true, true);
 
 #else
   
-  if (pSecurity)
+  if (!pSecurity)
   {
-	delete pSecurity;
+	pSecurity = new BLESecurity();
+  	pSecurity->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_MITM_BOND);
   }
-  pSecurity = new BLESecurity();
-  pSecurity->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_MITM_BOND);
 
 #endif // USE_NIMBLE
 
@@ -159,6 +156,20 @@ void BleKeyboard::begin(void)
 
 void BleKeyboard::end(void)
 {
+	if (advertising)
+	{
+		advertising->stop();
+		// do not release - the pointer is managed by BLEDevice
+		// delete advertising;
+		// advertising = nullptr;
+	}
+
+#ifndef USE_NIMBLE
+	delete hid;
+	hid = nullptr;
+#endif
+
+	//BLEDevice::deinit(false);	
 }
 
 void BleKeyboard::disconnect(void)
@@ -172,7 +183,9 @@ void BleKeyboard::disconnect(void)
 
     for (const auto& pair : peerDevices) {
         uint16_t connId = pair.first;
+		auto status = pair.second;
         pServer->disconnect(connId);
+		ESP_LOGD(LOG_TAG, "Disconnect %u", connId);
     }
 }
 
@@ -542,9 +555,9 @@ void BleKeyboard::onConnect(BLEServer* pServer) {
 #if !defined(USE_NIMBLE)
 
   BLE2902* desc = (BLE2902*)this->inputKeyboard->getDescriptorByUUID(BLEUUID((uint16_t)0x2902));
-  desc->setNotifications(true);
+  if (desc) desc->setNotifications(true);
   desc = (BLE2902*)this->inputMediaKeys->getDescriptorByUUID(BLEUUID((uint16_t)0x2902));
-  desc->setNotifications(true);
+  if (desc) desc->setNotifications(true);
 
 #endif // !USE_NIMBLE
 
@@ -556,9 +569,9 @@ void BleKeyboard::onDisconnect(BLEServer* pServer) {
 #if !defined(USE_NIMBLE)
 
   BLE2902* desc = (BLE2902*)this->inputKeyboard->getDescriptorByUUID(BLEUUID((uint16_t)0x2902));
-  desc->setNotifications(false);
+  if (desc) desc->setNotifications(false);
   desc = (BLE2902*)this->inputMediaKeys->getDescriptorByUUID(BLEUUID((uint16_t)0x2902));
-  desc->setNotifications(false);
+  if (desc) desc->setNotifications(false);
 
   advertising->start();
 
