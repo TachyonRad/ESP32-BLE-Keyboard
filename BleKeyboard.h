@@ -27,6 +27,7 @@
 
 #endif // USE_NIMBLE
 
+#include <map>
 #include "Print.h"
 
 #define BLE_KEYBOARD_VERSION "0.0.4"
@@ -144,7 +145,7 @@ private:
   std::string        deviceName;
   std::string        deviceManufacturer;
   uint8_t            batteryLevel;
-  bool               connected = false;
+  //bool               connected = false;
   uint32_t           _delay_ms = 7;
   void delay_ms(uint64_t ms);
 
@@ -152,11 +153,14 @@ private:
   uint16_t pid       = 0x820a;
   uint16_t version   = 0x0210;
 
+  std::map<uint16_t, esp_bd_addr_t> connected_devices;
+
 public:
   BleKeyboard(std::string deviceName = "ESP32 Keyboard", std::string deviceManufacturer = "Espressif", uint8_t batteryLevel = 100);
   void begin(void);
   void end(void);
   void disconnect();
+  BLEServer* getBLEServer();
   BLESecurity* getBLESecurity();
   BLEAdvertising* getBLEAdvertising();
   void sendReport(KeyReport* keys);
@@ -177,10 +181,16 @@ public:
   void set_vendor_id(uint16_t vid);
   void set_product_id(uint16_t pid);
   void set_version(uint16_t version);
+
+  const std::map<uint16_t, esp_bd_addr_t>& getConnectedDevices() const;
+  bool isDeviceConnected(const esp_bd_addr_t address) const;
+
 protected:
   virtual void onStarted(BLEServer *pServer) { };
-  virtual void onConnect(BLEServer* pServer) override;
-  virtual void onDisconnect(BLEServer* pServer) override;
+  //virtual void onConnect(BLEServer* pServer) override;
+  virtual void onConnect(BLEServer* pServer, esp_ble_gatts_cb_param_t *param) override;
+  //virtual void onDisconnect(BLEServer* pServer) override;
+  virtual void onDisconnect(BLEServer* pServer, esp_ble_gatts_cb_param_t *param) override;
   virtual void onWrite(BLECharacteristic* me) override;
 
 };

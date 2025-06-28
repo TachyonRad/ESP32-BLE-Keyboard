@@ -189,6 +189,11 @@ void BleKeyboard::disconnect(void)
     }
 }
 
+BLEServer *BleKeyboard::getBLEServer()
+{
+    return pServer;
+}
+
 BLESecurity *BleKeyboard::getBLESecurity()
 {
     return pSecurity;
@@ -200,7 +205,7 @@ BLEAdvertising *BleKeyboard::getBLEAdvertising()
 }
 
 bool BleKeyboard::isConnected(void) {
-  return this->connected;
+  return !connected_devices.empty(); //this->connected;
 }
 
 void BleKeyboard::setBatteryLevel(uint8_t level) {
@@ -233,6 +238,21 @@ void BleKeyboard::set_product_id(uint16_t pid) {
 
 void BleKeyboard::set_version(uint16_t version) { 
 	this->version = version; 
+}
+
+const std::map<uint16_t, esp_bd_addr_t> &BleKeyboard::getConnectedDevices() const
+{
+    return connected_devices;
+}
+
+bool BleKeyboard::isDeviceConnected(const esp_bd_addr_t address) const
+{
+    for (const auto& [id, addr] : connected_devices) {
+        if (memcmp(addr, address, sizeof(esp_bd_addr_t)) == 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void BleKeyboard::sendReport(KeyReport* keys)
@@ -549,8 +569,10 @@ size_t BleKeyboard::write(const uint8_t *buffer, size_t size) {
 	return n;
 }
 
-void BleKeyboard::onConnect(BLEServer* pServer) {
-  this->connected = true;
+void BleKeyboard::onConnect(BLEServer* pServer, esp_ble_gatts_cb_param_t *param) {
+//void BleKeyboard::onConnect(BLEServer* pServer) {
+  //this->connected = true;
+	  memcpy(connected_devices[param->connect.conn_id], param->connect.remote_bda, 6);
 
 #if !defined(USE_NIMBLE)
 
@@ -563,8 +585,10 @@ void BleKeyboard::onConnect(BLEServer* pServer) {
 
 }
 
-void BleKeyboard::onDisconnect(BLEServer* pServer) {
-  this->connected = false;
+void BleKeyboard::onDisconnect(BLEServer* pServer, esp_ble_gatts_cb_param_t *param) {
+//void BleKeyboard::onDisconnect(BLEServer* pServer) {
+  //this->connected = false;
+	connected_devices.erase(param->disconnect.conn_id);
 
 #if !defined(USE_NIMBLE)
 
