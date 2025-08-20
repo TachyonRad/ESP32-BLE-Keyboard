@@ -101,57 +101,66 @@ BleKeyboard::BleKeyboard(std::string deviceName, std::string deviceManufacturer,
 	, pSecurity(nullptr)
     , deviceName(std::string(deviceName).substr(0, 15))
     , deviceManufacturer(std::string(deviceManufacturer).substr(0,15))
-    , batteryLevel(batteryLevel) {}
+    , batteryLevel(batteryLevel)
+	, inputKeyboard(nullptr)
+	, outputKeyboard(nullptr)
+	, inputMediaKeys(nullptr) {}
 
 void BleKeyboard::begin(void)
 {
-  BLEDevice::init(String(deviceName.c_str()));
-  if (!pServer)
-  {
-	  pServer = BLEDevice::createServer();
-  }
-  pServer->setCallbacks(this);
+  	BLEDevice::init(String(deviceName.c_str()));
+  	if (!pServer)
+  	{
+	  	pServer = BLEDevice::createServer();
+  		pServer->setCallbacks(this);
+  	}
+	
+  	if (!hid)
+	{
+	  	hid = new BLEHIDDevice(pServer);
+	
 
-  hid = new BLEHIDDevice(pServer);
-  inputKeyboard = hid->inputReport(KEYBOARD_ID);  // <-- input REPORTID from report map
-  outputKeyboard = hid->outputReport(KEYBOARD_ID);
-  inputMediaKeys = hid->inputReport(MEDIA_KEYS_ID);
+	if (!inputKeyboard)
+	{
+  		inputKeyboard = hid->inputReport(KEYBOARD_ID);  // <-- input REPORTID from report map
+	}
+	if (!outputKeyboard)
+	{
+	  	outputKeyboard = hid->outputReport(KEYBOARD_ID);
+  		outputKeyboard->setCallbacks(this);
+	}
+	if (!inputMediaKeys)
+	{
+		inputMediaKeys = hid->inputReport(MEDIA_KEYS_ID);
+	}
 
-  outputKeyboard->setCallbacks(this);
-
-  hid->manufacturer()->setValue(String(deviceManufacturer.c_str()));
-
-  hid->pnp(0x02, vid, pid, version);
-  hid->hidInfo(0x00, 0x01);
-
+  	hid->manufacturer()->setValue(String(deviceManufacturer.c_str()));
+  	hid->pnp(0x02, vid, pid, version);
+  	hid->hidInfo(0x00, 0x01);
+  	hid->reportMap((uint8_t*)_hidReportDescriptor, sizeof(_hidReportDescriptor));
+  	hid->startServices();
+	}
 // TODO possible removal
 #if defined(USE_NIMBLE)
-
   BLEDevice::setSecurityAuth(true, true, true);
-
 #else
-  
-  if (!pSecurity)
-  {
-	pSecurity = new BLESecurity();
-  	pSecurity->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_MITM_BOND);
-  }
-
+  	if (!pSecurity)
+  	{
+  		pSecurity = new BLESecurity();
+  		pSecurity->setAuthenticationMode(ESP_LE_AUTH_REQ_SC_MITM_BOND);
+  	}
 #endif // USE_NIMBLE
 
-  hid->reportMap((uint8_t*)_hidReportDescriptor, sizeof(_hidReportDescriptor));
-  hid->startServices();
+  	onStarted(pServer);
 
-  onStarted(pServer);
+  	advertising = pServer->getAdvertising();
+  	advertising->setAppearance(HID_KEYBOARD);
+  	advertising->addServiceUUID(hid->hidService()->getUUID());
+  	advertising->setScanResponse(false);
+  	advertising->start();
+  	hid->setBatteryLevel(batteryLevel);
 
-  advertising = pServer->getAdvertising();
-  advertising->setAppearance(HID_KEYBOARD);
-  advertising->addServiceUUID(hid->hidService()->getUUID());
-  advertising->setScanResponse(false);
-  advertising->start();
-  hid->setBatteryLevel(batteryLevel);
-
-  ESP_LOGD(LOG_TAG, "Advertising started!");
+  	ESP_LOGD(LOG_TAG, "Advertising started!");
 }
 
 void BleKeyboard::end(void)
@@ -165,8 +174,8 @@ void BleKeyboard::end(void)
 	}
 
 #ifndef USE_NIMBLE
-	delete hid;
-	hid = nullptr;
+	// delete hid;
+	// hid = nullptr;
 #endif
 
 	//BLEDevice::deinit(false);	
@@ -572,17 +581,37 @@ size_t BleKeyboard::write(const uint8_t *buffer, size_t size) {
 void BleKeyboard::onConnect(BLEServer* pServer, esp_ble_gatts_cb_param_t *param) {
 //void BleKeyboard::onConnect(BLEServer* pServer) {
   //this->connected = true;
-	  memcpy(connected_devices[param->connect.conn_id], param->connect.remote_bda, 6);
-
+  	if (!param)
+  	{
+		log_w("Empty param for onConnect callback");
+		return;
+  	}
+	
+	memcpy(connected_devices[param->connect.conn_id], param->connect.remote_bda, 6);
+	log_d("NOGAJ *********************************");
 #if !defined(USE_NIMBLE)
-
-  BLE2902* desc = (BLE2902*)this->inputKeyboard->getDescriptorByUUID(BLEUUID((uint16_t)0x2902));
-  if (desc) desc->setNotifications(true);
-  desc = (BLE2902*)this->inputMediaKeys->getDescriptorByUUID(BLEUUID((uint16_t)0x2902));
-  if (desc) desc->setNotifications(true);
+	log_d("KOKO 1 **********************************");
+	BLEUUID uuid((uint16_t)0x2902);
+	if (this->inputKeyboard)
+	{
+		log_d("KOKO 1.1 **********************************");
+	}
+  	BLE2902* desc = (BLE2902*)this->inputKeyboard->getDescriptorByUUID(uuid); //BLEUUID((uint16_t)0x2902));
+  	log_d("KOKO 2 **********************************");
+  	if (desc) {
+		log_d("KOKO 3 **********************************");
+		desc->setNotifications(true);
+	}
+	log_d("KOKO 4 **********************************");
+  	desc = (BLE2902*)this->inputMediaKeys->getDescriptorByUUID(BLEUUID((uint16_t)0x2902));
+  	if (desc) {
+		log_d("KOKO 5 **********************************");
+		desc->setNotifications(true);
+	}
+	
 
 #endif // !USE_NIMBLE
-
+	log_d("Co jest tej?!");
 }
 
 void BleKeyboard::onDisconnect(BLEServer* pServer, esp_ble_gatts_cb_param_t *param) {
